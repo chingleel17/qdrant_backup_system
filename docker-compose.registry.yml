@@ -4,7 +4,7 @@
 services:
   qdrant-backup-api:
     # 使用 Artifact Registry 的映像檔
-    image: asia-east1-docker.pkg.dev/${GCP_PROJECT_ID}/qdrant/qdrant-backup-api:latest
+    image: asia-east1-docker.pkg.dev/arielcommerce/qdrant/qdrant-backup-api:latest
 
     container_name: qdrant-backup-api
     ports:
@@ -16,17 +16,17 @@ services:
       - QDRANT_API_KEY=${QDRANT_API_KEY}
 
       # GCS 設定
-      # - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-csfiledata.ariel.com.tw}
-      # - GCS_FOLDER_PREFIX=${GCS_FOLDER_PREFIX:-qdrant}
-      # - BACKUP_LOCAL_PATH=${BACKUP_LOCAL_PATH:-/tmp/qdrant_snapshots}
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-csfiledata.ariel.com.tw}
+      - GCS_FOLDER_PREFIX=${GCS_FOLDER_PREFIX:-qdrant}
+      - BACKUP_LOCAL_PATH=${BACKUP_LOCAL_PATH:-/tmp/qdrant_snapshots}
 
-      # # GCP 認證
-      # - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+      # GCP 認證 (如果需要使用服務帳戶金鑰)
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
 
     volumes:
-      # GCP 服務帳戶金鑰檔案 (如果需要)
-      # - ${GOOGLE_APPLICATION_CREDENTIALS_FILE_PATH}:${GOOGLE_APPLICATION_CREDENTIALS}:ro
-      # 備份目錄
+      # 如果需要掛載 GCP 服務帳戶金鑰檔案
+      - ${GOOGLE_APPLICATION_CREDENTIALS_FILE_PATH}:${GOOGLE_APPLICATION_CREDENTIALS}:ro
+      # 掛載備份目錄 (可選，用於調試)
       - ./backups:/tmp/qdrant_snapshots
 
     networks:

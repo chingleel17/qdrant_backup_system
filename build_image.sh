@@ -6,7 +6,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # 載入環境變數
-source "$SCRIPT_DIR/../../.env"
+source .env
 
 # 檢查必要環境變數
 if [ -z "$GCP_PROJECT_ID" ]; then
@@ -26,8 +26,7 @@ echo "映像檔名稱: $FULL_IMAGE_NAME"
 
 # 建立映像檔
 echo "📦 建構 Docker 映像檔..."
-docker build -t $FULL_IMAGE_NAME .
-
+docker build -f app/Dockerfile -t $FULL_IMAGE_NAME .
 if [ $? -ne 0 ]; then
     echo "❌ Docker 映像檔建構失敗！"
     exit 1

@@ -9,11 +9,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 複製需求檔案並安裝 Python 相依套件
-COPY requirements.txt .
+COPY app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 複製應用程式檔案
-COPY main.py .
+COPY app/main.py .
 
 # 建立備份目錄
 RUN mkdir -p /tmp/qdrant_snapshots
