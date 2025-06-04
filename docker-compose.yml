@@ -1,0 +1,72 @@
+services:
+  qdrant-backup-api:
+    # 使用 Google Cloud Artifact Registry 的映像檔
+    # 執行 ./build_image.sh 後可啟用此設定
+    # image: asia-east1-docker.pkg.dev/${GCP_PROJECT_ID}/qdrant/qdrant-backup-api:latest
+
+    # 本地建構 (預設)
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+
+    container_name: qdrant-backup-api
+    ports:
+      - "8081:8080"
+    environment:
+      # Qdrant 連線設定
+      - QDRANT_HOST=${QDRANT_HOST:-localhost}
+      - QDRANT_PORT=${QDRANT_PORT:-6333}
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+
+      # GCS 設定
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-csfiledata.ariel.com.tw}
+      - GCS_FOLDER_PREFIX=${GCS_FOLDER_PREFIX:-qdrant}
+      - BACKUP_LOCAL_PATH=${BACKUP_LOCAL_PATH:-/tmp/qdrant_snapshots}
+
+      # GCP 認證 (如果需要使用服務帳戶金鑰)
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+
+    volumes:
+      # 如果需要掛載 GCP 服務帳戶金鑰檔案
+      - ${GOOGLE_APPLICATION_CREDENTIALS_FILE_PATH}:${GOOGLE_APPLICATION_CREDENTIALS}:ro
+      # 掛載備份目錄 (可選，用於調試)
+      - ./backups:/tmp/qdrant_snapshots
+
+    networks:
+      - qdrant-network
+
+    restart: unless-stopped
+
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # 依賴於 qdrant 服務 (如果在同一個 docker-compose 中)
+    depends_on:
+      - qdrant
+
+  # 可選：如果 Qdrant 也在同一個 docker-compose 中
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-main
+    ports:
+      - "6333:6333"
+    environment:
+      - QDRANT_SERVICE_API_KEY=${QDRANT_API_KEY}
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - qdrant-network
+    restart: unless-stopped
+
+networks:
+  qdrant-network:
+    driver: bridge
+
+volumes:
+  qdrant_data:
+    driver: local
