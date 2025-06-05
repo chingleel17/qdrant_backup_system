@@ -3,7 +3,7 @@
 # Cloud Function 部署腳本
 
 set -e
-
+source ../.env
 # 設定變數
 FUNCTION_NAME="qdrant-backup-trigger"
 REGION="asia-east1"
@@ -16,7 +16,7 @@ if [ -z "$GCP_PROJECT_ID" ]; then
 fi
 
 if [ -z "$VM_BACKUP_API_URL" ]; then
-    echo "錯誤: 請設定 VM_BACKUP_API_URL 環境變數 (例如: http://10.140.0.13:8081)"
+    echo "錯誤: 請設定 VM_BACKUP_API_URL 環境變數 (例如: http://10.10.0.13:8081)"
     exit 1
 fi
 
@@ -34,12 +34,12 @@ gcloud functions deploy $FUNCTION_NAME \
     --source . \
     --entry-point trigger_qdrant_backup \
     --trigger-http \
-    --allow-unauthenticated \
+    --ingress-settings internal-only \
     --memory 512MB \
     --timeout 900s \
     --max-instances 10 \
-    --set-env-vars "VM_BACKUP_API_URL=$VM_BACKUP_API_URL,BACKUP_API_TIMEOUT=900" \
-    --project $PROJECT_ID
+    --project $PROJECT_ID \
+    --vpc-connector qdrant-connector \
 
 if [ $? -eq 0 ]; then
     echo "✅ Cloud Function 部署成功！"

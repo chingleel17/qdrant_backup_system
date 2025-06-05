@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # 環境變數
 VM_BACKUP_API_URL = os.getenv(
-    'VM_BACKUP_API_URL')  # 例如: http://10.140.0.13:8081
+    'VM_BACKUP_API_URL')  # 例如: http://10.10.1.13:8081
 BACKUP_API_TIMEOUT = int(os.getenv('BACKUP_API_TIMEOUT', '900'))  # 15分鐘
 AUTHORIZATION_TOKEN = os.getenv('AUTHORIZATION_TOKEN', '')  # 可選的認證 token
 

@@ -3,16 +3,24 @@
 # Cloud Scheduler 設定腳本
 
 set -e
+source .env
 
 # 設定變數
 JOB_NAME="qdrant-backup-hourly"
 REGION="asia-east1"
 PROJECT_ID=${GCP_PROJECT_ID}
 FUNCTION_NAME="qdrant-backup-trigger"
-
-# 檢查必要環境變數
+# 預設排程服務帳號 範例 YOUR_SCHEDULER_SA@PROJECT_ID.iam.gserviceaccount.com
+SCHEDULER_SA=${SCHEDULER_SA_EMAIL}
+# 檢查必要環境變數 服務帳號
 if [ -z "$GCP_PROJECT_ID" ]; then
     echo "錯誤: 請設定 GCP_PROJECT_ID 環境變數"
+    exit 1
+
+fi
+
+if [ -z "$SCHEDULER_SA" ]; then
+    echo "錯誤: 請設定 SCHEDULER_SA 環境變數"
     exit 1
 fi
 
@@ -45,8 +53,9 @@ if gcloud scheduler jobs describe $JOB_NAME --location=$REGION --project=$PROJEC
         --schedule='0 * * * *' \
         --uri="$FUNCTION_URL" \
         --http-method=POST \
-        --headers='Content-Type=application/json' \
+        --update-headers='Content-Type=application/json' \
         --message-body='{}' \
+        --oidc-service-account-email=$SCHEDULER_SA \
         --project=$PROJECT_ID
 else
     echo "建立新排程 '$JOB_NAME'..."
@@ -58,6 +67,7 @@ else
         --http-method=POST \
         --headers='Content-Type=application/json' \
         --message-body='{}' \
+        --oidc-service-account-email=$SCHEDULER_SA \
         --project=$PROJECT_ID
 fi
 

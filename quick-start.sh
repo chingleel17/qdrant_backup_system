@@ -91,7 +91,7 @@ case $choice in
                 export VM_BACKUP_API_URL="http://${INTERNAL_IP}:8081"
                 echo "偵測到內部 IP: $INTERNAL_IP"
             else
-                read -p "請輸入 VM 備份 API URL (例如: http://10.140.0.13:8081): " VM_BACKUP_API_URL
+                read -p "請輸入 VM 備份 API URL (例如: http://10.10.0.13:8081): " VM_BACKUP_API_URL
                 export VM_BACKUP_API_URL
             fi
         fi
