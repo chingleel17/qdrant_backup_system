@@ -40,6 +40,7 @@ gcloud functions deploy $FUNCTION_NAME \
     --max-instances 10 \
     --project $PROJECT_ID \
     --vpc-connector qdrant-connector \
+    --set-env-vars VM_BACKUP_API_URL=$VM_BACKUP_API_URL,BACKUP_API_TIMEOUT=$BACKUP_API_TIMEOUT
 
 if [ $? -eq 0 ]; then
     echo "✅ Cloud Function 部署成功！"
@@ -52,12 +53,21 @@ if [ $? -eq 0 ]; then
 
     echo "Function URL: $FUNCTION_URL"
 
-    # 測試呼叫
+       # 測試呼叫
     echo "測試 Cloud Function..."
-    curl -X POST "$FUNCTION_URL" \
+    HTTP_STATUS=$(curl -X POST "$FUNCTION_URL" \
         -H "Content-Type: application/json" \
         -d '{}' \
-        --max-time 30
+        --max-time 30 \
+        -s -o /dev/null -w "%{http_code}")
+
+    if [[ "$HTTP_STATUS" != 2* ]]; then
+        echo "❌ Cloud Function 測試失敗，HTTP 狀態碼: $HTTP_STATUS"
+        echo "請檢查 Function 是否正確部署與路徑設定"
+        exit 1
+    else
+        echo "✅ Cloud Function 測試成功，HTTP 狀態碼: $HTTP_STATUS"
+    fi0
 
     echo ""
     echo "部署完成！"

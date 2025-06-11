@@ -264,6 +264,20 @@ class QdrantBackupService:
                 'duration_seconds': duration
             }
 
+    def cleanup_old_backups(self, days: int = 7):
+        """刪除本地和 GCS 上超過 days 天的備份檔案"""
+        cutoff = datetime.now() - timedelta(days=days)
+
+        # 刪除 GCS 檔案
+        blobs = self.bucket.list_blobs(prefix=GCS_FOLDER_PREFIX)
+        for blob in blobs:
+            if blob.time_created < cutoff:
+                try:
+                    blob.delete()
+                    logger.info(f"已刪除 GCS 過期備份: {blob.name}")
+                except Exception as e:
+                    logger.warning(f"刪除 GCS 備份失敗: {blob.name} - {e}")
+
 
 # 初始化備份服務
 backup_service = QdrantBackupService()
@@ -286,6 +300,9 @@ def backup_endpoint():
         # 檢查請求資料
         data = request.get_json() or {}
         collection_name = data.get('collection')
+
+        #清除超過7天的備份
+        backup_service.cleanup_old_backups(days=7)
 
         if collection_name:
             # 備份指定 collection
