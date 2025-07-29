@@ -20,6 +20,24 @@ VM_BACKUP_API_URL = os.getenv(
 BACKUP_API_TIMEOUT = int(os.getenv('BACKUP_API_TIMEOUT', '900'))  # 15分鐘
 AUTHORIZATION_TOKEN = os.getenv('AUTHORIZATION_TOKEN', '')  # 可選的認證 token
 
+LOG_PREFIX = "[QDRANT-BACKUP-CLOUD-FUNCTION]"
+
+
+def log_info(msg, *args, **kwargs):
+    logger.info(f"{LOG_PREFIX} {msg}", *args, **kwargs)
+
+
+def log_error(msg, *args, **kwargs):
+    logger.error(f"{LOG_PREFIX} {msg}", *args, **kwargs)
+
+
+def log_warning(msg, *args, **kwargs):
+    logger.warning(f"{LOG_PREFIX} {msg}", *args, **kwargs)
+
+
+def log_exception(msg, *args, exc_info=True, **kwargs):
+    logger.exception(f"{LOG_PREFIX} {msg}", *args, exc_info=exc_info, **kwargs)
+
 
 @functions_framework.http
 def trigger_qdrant_backup(request):
@@ -33,7 +51,7 @@ def trigger_qdrant_backup(request):
         # 驗證環境變數
         if not VM_BACKUP_API_URL:
             error_msg = "缺少必要的環境變數: VM_BACKUP_API_URL"
-            logger.error(error_msg)
+            log_error(error_msg)
             return {
                 'success': False,
                 'error': error_msg,
@@ -57,14 +75,14 @@ def trigger_qdrant_backup(request):
         backup_data = {}
         if collection_name:
             backup_data['collection'] = collection_name
-            logger.info(f"開始觸發指定 collection 備份: {collection_name}")
+            log_info(f"開始觸發指定 collection 備份: {collection_name}")
         else:
-            logger.info("開始觸發所有 collections 備份")
+            log_info("開始觸發所有 collections 備份")
 
         # 呼叫 VM 上的備份 API
         backup_url = f"{VM_BACKUP_API_URL.rstrip('/')}/backup"
 
-        logger.info(f"呼叫備份 API: {backup_url}")
+        log_info(f"呼叫備份 API: {backup_url}")
 
         response = requests.post(backup_url,
                                  json=backup_data,
@@ -76,13 +94,17 @@ def trigger_qdrant_backup(request):
             result = response.json()
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
+            success_count = 0
+            total_count = 0
 
-            # 記錄成功日誌
-            logger.info(f"備份觸發成功，耗時: {duration:.2f}秒")
             if result.get('collections'):
                 success_count = result.get('success_count', 0)
                 total_count = result.get('total_collections', 0)
-                logger.info(f"備份結果: {success_count}/{total_count} 成功")
+
+            # 記錄成功日誌
+            log_info(
+                f"備份觸發成功，耗時: {duration:.2f}秒，備份結果: {success_count}/{total_count}成功"
+            )
 
             return {
                 'success': True,
@@ -95,7 +117,7 @@ def trigger_qdrant_backup(request):
         else:
             # 備份 API 回傳錯誤
             error_msg = f"備份 API 呼叫失敗，狀態碼: {response.status_code}"
-            logger.error(f"{error_msg}, 回應: {response.text}")
+            log_error(f"{error_msg}, 回應: {response.text}")
 
             try:
                 error_response = response.json()
@@ -112,7 +134,7 @@ def trigger_qdrant_backup(request):
 
     except requests.exceptions.Timeout:
         error_msg = f"備份 API 呼叫超時 (超過 {BACKUP_API_TIMEOUT} 秒)"
-        logger.error(error_msg)
+        log_error(error_msg)
         return {
             'success': False,
             'error': error_msg,
@@ -122,7 +144,7 @@ def trigger_qdrant_backup(request):
 
     except requests.exceptions.ConnectionError as e:
         error_msg = f"無法連線到備份 API: {str(e)}"
-        logger.error(error_msg)
+        log_error(error_msg)
         return {
             'success': False,
             'error': error_msg,
@@ -132,7 +154,7 @@ def trigger_qdrant_backup(request):
 
     except Exception as e:
         error_msg = f"Cloud Function 執行錯誤: {str(e)}"
-        logger.exception(error_msg)
+        log_exception(error_msg)
         return {
             'success': False,
             'error': error_msg,
@@ -170,7 +192,7 @@ def health_check(request):
         }, 200
 
     except Exception as e:
-        logger.exception("健康檢查失敗")
+        log_exception("健康檢查失敗", exc_info=True)
         return {
             'status': 'unhealthy',
             'error': str(e),

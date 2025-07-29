@@ -31,6 +31,7 @@ QDRANT_API_KEY = os.getenv('QDRANT_API_KEY', '')
 GCS_BUCKET_NAME = os.getenv('GCS_BUCKET_NAME', 'csfiledata.ariel.com.tw')
 GCS_FOLDER_PREFIX = os.getenv('GCS_FOLDER_PREFIX', 'qdrant')
 BACKUP_LOCAL_PATH = os.getenv('BACKUP_LOCAL_PATH', '/tmp/qdrant_snapshots')
+DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() in ['true', '1', 'yes']
 
 # 確保備份目錄存在
 Path(BACKUP_LOCAL_PATH).mkdir(parents=True, exist_ok=True)
@@ -38,6 +39,23 @@ Path(BACKUP_LOCAL_PATH).mkdir(parents=True, exist_ok=True)
 
 class QdrantBackupService:
     """Qdrant 備份服務類別"""
+    LOG_PREFIX = "[QDRANT-BACKUP-API]"
+
+    def log_info(self, msg, *args, **kwargs):
+        """記錄資訊日誌"""
+        if DEBUG_MODE:
+            print(f"{self.LOG_PREFIX} {msg}", *args, **kwargs)
+        else:
+            logger.info(f"{self.LOG_PREFIX} {msg}", *args, **kwargs)
+
+    def log_error(self, msg, *args, **kwargs):
+        if DEBUG_MODE:
+            print(f"{self.LOG_PREFIX} {msg}", *args, **kwargs)
+        else:
+            logger.error(f"{self.LOG_PREFIX} {msg}", *args, **kwargs)
+
+    def log_warning(self, msg, *args, **kwargs):
+        logger.warning(f"{self.LOG_PREFIX} {msg}", *args, **kwargs)
 
     def __init__(self):
         self.qdrant_url = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
@@ -63,11 +81,12 @@ class QdrantBackupService:
                 for collection in data.get('result', {}).get(
                     'collections', [])
             ]
-            logger.info(f"找到 {len(collections)} 個 collections: {collections}")
+            self.log_info(
+                f"找到 {len(collections)} 個 collections: {collections}")
             return collections
 
         except Exception as e:
-            logger.error(f"取得 collections 失敗: {e}")
+            self.log_error(f"取得 collections 失敗: {e}")
             raise
 
     def create_snapshot(self, collection_name: str) -> str:
@@ -87,13 +106,13 @@ class QdrantBackupService:
             if not snapshot_name:
                 raise ValueError(f"無法取得 snapshot 名稱: {data}")
 
-            logger.info(
+            self.log_info(
                 f"Collection '{collection_name}' snapshot 建立成功: {snapshot_name}"
             )
             return snapshot_name
 
         except Exception as e:
-            logger.error(
+            self.log_error(
                 f"建立 snapshot 失敗 (collection: {collection_name}): {e}")
             raise
 
@@ -120,11 +139,11 @@ class QdrantBackupService:
                     if chunk:
                         f.write(chunk)
 
-            logger.info(f"Snapshot 下載完成: {local_path}")
+            self.log_info(f"Snapshot 下載完成: {local_path}")
             return local_path
 
         except Exception as e:
-            logger.error(f"下載 snapshot 失敗: {e}")
+            self.log_error(f"下載 snapshot 失敗: {e}")
             raise
 
     def upload_to_gcs(self, local_path: str, collection_name: str) -> str:
@@ -137,11 +156,11 @@ class QdrantBackupService:
             blob = self.bucket.blob(gcs_path)
             blob.upload_from_filename(local_path)
 
-            logger.info(f"檔案上傳到 GCS 成功: gs://{GCS_BUCKET_NAME}/{gcs_path}")
+            self.log_info(f"檔案上傳到 GCS 成功: gs://{GCS_BUCKET_NAME}/{gcs_path}")
             return gcs_path
 
         except Exception as e:
-            logger.error(f"上傳到 GCS 失敗: {e}")
+            self.log_error(f"上傳到 GCS 失敗: {e}")
             raise
 
     def cleanup_local_file(self, local_path: str):
@@ -149,9 +168,9 @@ class QdrantBackupService:
         try:
             if os.path.exists(local_path):
                 os.remove(local_path)
-                logger.info(f"本地檔案清理完成: {local_path}")
+                self.log_info(f"本地檔案清理完成: {local_path}")
         except Exception as e:
-            logger.warning(f"清理本地檔案失敗: {e}")
+            self.log_warning(f"清理本地檔案失敗: {e}")
 
     def delete_snapshot(self, collection_name: str, snapshot_name: str):
         """刪除 Qdrant 上的 snapshot"""
@@ -161,10 +180,10 @@ class QdrantBackupService:
                 headers=self.headers,
                 timeout=30)
             response.raise_for_status()
-            logger.info(
+            self.log_info(
                 f"Qdrant snapshot 刪除完成: {collection_name}/{snapshot_name}")
         except Exception as e:
-            logger.warning(f"刪除 Qdrant snapshot 失敗: {e}")
+            self.log_warning(f"刪除 Qdrant snapshot 失敗: {e}")
 
     def backup_collection(self, collection_name: str) -> Dict[str, Any]:
         """備份單個 collection"""
@@ -178,7 +197,8 @@ class QdrantBackupService:
 
         local_path = None
         snapshot_name = None
-
+        self.log_info(
+            f"{self.LOG_PREFIX} 開始備份指定 collection: {collection_name}")
         try:
             # 1. 建立 snapshot
             snapshot_name = self.create_snapshot(collection_name)
@@ -196,11 +216,11 @@ class QdrantBackupService:
             self.delete_snapshot(collection_name, snapshot_name)
 
             result['success'] = True
-            logger.info(f"Collection '{collection_name}' 備份完成")
-
+            self.log_info(
+                f"{self.LOG_PREFIX} Collection '{collection_name}' 備份完成")
         except Exception as e:
             result['error'] = str(e)
-            logger.error(f"Collection '{collection_name}' 備份失敗: {e}")
+            self.log_error(f"Collection '{collection_name}' 備份失敗: {e}")
 
             # 清理失敗的檔案
             if local_path:
@@ -213,7 +233,7 @@ class QdrantBackupService:
     def backup_all_collections(self) -> Dict[str, Any]:
         """備份所有 collections"""
         start_time = datetime.now()
-
+        self.log_info(f"{self.LOG_PREFIX} 開始備份所有 collections")
         try:
             collections = self.get_collections()
 
@@ -229,7 +249,7 @@ class QdrantBackupService:
             success_count = 0
 
             for collection_name in collections:
-                logger.info(f"開始備份 collection: {collection_name}")
+                self.log_info(f"開始備份 collection: {collection_name}")
                 result = self.backup_collection(collection_name)
                 results.append(result)
 
@@ -266,17 +286,22 @@ class QdrantBackupService:
 
     def cleanup_old_backups(self, days: int = 7):
         """刪除本地和 GCS 上超過 days 天的備份檔案"""
-        cutoff = datetime.now() - timedelta(days=days)
-
+        now = datetime.now()
         # 刪除 GCS 檔案
         blobs = self.bucket.list_blobs(prefix=GCS_FOLDER_PREFIX)
         for blob in blobs:
-            if blob.time_created < cutoff:
-                try:
+            # blob.name 格式: qdrant/YYYY/MM/DD/filename
+            parts = blob.name.split('/')
+            if len(parts) < 4:
+                continue
+            try:
+                y, m, d = int(parts[1]), int(parts[2]), int(parts[3])
+                folder_date = datetime(y, m, d)
+                if (now - folder_date).days > days:
                     blob.delete()
-                    logger.info(f"已刪除 GCS 過期備份: {blob.name}")
-                except Exception as e:
-                    logger.warning(f"刪除 GCS 備份失敗: {blob.name} - {e}")
+                    self.log_info(f"已刪除 GCS 過期備份: {blob.name}")
+            except Exception as e:
+                self.log_warning(f"刪除 GCS 備份失敗: {blob.name} - {e}")
 
 
 # 初始化備份服務
@@ -306,7 +331,6 @@ def backup_endpoint():
 
         if collection_name:
             # 備份指定 collection
-            logger.info(f"開始備份指定 collection: {collection_name}")
             result = backup_service.backup_collection(collection_name)
 
             if result['success']:
@@ -315,7 +339,6 @@ def backup_endpoint():
                 return jsonify(result), 500
         else:
             # 備份所有 collections
-            logger.info("開始備份所有 collections")
             result = backup_service.backup_all_collections()
 
             if result['success']:
@@ -324,7 +347,7 @@ def backup_endpoint():
                 return jsonify(result), 500
 
     except Exception as e:
-        logger.error(f"備份 API 錯誤: {e}")
+        backup_service.log_error(f"備份 API 錯誤: {e}")
         return jsonify({
             'success': False,
             'error': str(e),
@@ -343,7 +366,7 @@ def list_collections():
             'count': len(collections)
         })
     except Exception as e:
-        logger.error(f"取得 collections 失敗: {e}")
+
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -376,12 +399,12 @@ if __name__ == '__main__':
     missing_vars = [var for var in required_env_vars if not os.getenv(var)]
 
     if missing_vars:
-        logger.error(f"缺少必要的環境變數: {missing_vars}")
+        backup_service.log_error(f"缺少必要的環境變數: {missing_vars}")
         exit(1)
 
-    logger.info("Qdrant 備份 API 服務啟動中...")
-    logger.info(f"Qdrant URL: {backup_service.qdrant_url}")
-    logger.info(f"GCS Bucket: {GCS_BUCKET_NAME}")
-    logger.info(f"備份路徑: {BACKUP_LOCAL_PATH}")
+    backup_service.log_info("Qdrant 備份 API 服務啟動中...")
+    backup_service.log_info(f"Qdrant URL: {backup_service.qdrant_url}")
+    backup_service.log_info(f"GCS Bucket: {GCS_BUCKET_NAME}")
+    backup_service.log_info(f"備份路徑: {BACKUP_LOCAL_PATH}")
 
     app.run(host='0.0.0.0', port=8080, debug=False)

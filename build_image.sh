@@ -62,6 +62,10 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "💡 要在 docker-compose.yml 中使用此映像檔，請將 build 部分替換為："
     echo "  image: $FULL_IMAGE_NAME"
+    echo ""
+    echo "💡 推送後須手動 pull 映像檔後重新啟動服務，可執行以下指令："
+    echo "docker-compose pull qdrant-backup-api"
+    echo "docker-compose up -d qdrant-backup-api"
 
 else
     echo "❌ 映像檔推送失敗！"
